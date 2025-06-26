@@ -1,4 +1,6 @@
-🚨 Sentiment Analysis of Tweets for Hate Speech Detection
+
+# 🚨 Sentiment Analysis of Tweets for Hate Speech Detection
+
 This project aims to classify tweets based on whether they contain hate speech, specifically racist or sexist content. It is framed as a binary classification task.
 
 📌 Objective
