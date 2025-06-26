@@ -1,0 +1,363 @@
+!pip install wordcloud
+
+import re              
+import pandas as pd
+import numpy as np
+import nltk
+import warnings
+import matplotlib.pyplot as plt
+pd.set_option("display.max_colwidth", 200)           #sets the maximum width for displaying columns in pandas dataframes to 200 characters
+warnings.filterwarnings("ignore", category=DeprecationWarning)  #Ignores all Deprecation warnings
+%matplotlib inline
+
+
+
+#Loading the Training Data in a Pandas DataFrame
+df_train = pd.read_csv('C:/Users/Harsh/Downloads/train.csv')
+
+#Getting the number of Racist/Sexist(1) and Non-Racist/Sexist(0)
+df_train['label'].value_counts()
+
+
+#Loading the Testing Data in a Pandas DataFrame
+df_test = pd.read_csv('C:/Users/Harsh/Downloads/test.csv')
+
+
+
+#Displaying the first 100 Non-racist/sexist Tweets in the data
+display(df_train[df_train['label']==0].head(100))
+print('')
+
+#Displaying the first 100 racist/sexist Tweets in the data
+display(df_train[df_train['label']==1].head(100))
+
+
+
+#Dimensions of the train and test dataset.
+print("Train Dataset Shape: ",df_train.shape,"\nTest Dataset Shape: ",df_test.shape)
+print('')
+#print(df_train['label'].value_counts())
+
+#Percentage of Racist and Non-Racist Tweets.
+percent = len(df_train[df_train['label']==1])*100/len(df_train['label'])
+print('\nPercentage of Racisct Tweets in the Training Data: ',percent)
+print('Percent Non-Racist Tweets in the Training Data: ',100-percent)
+#Now we will check the distribution of length of the tweets, in terms of words, in both train and test data.
+
+length_train = df_train['tweet'].str.len()
+length_test = df_test['tweet'].str.len()
+
+plt.hist(length_train,bins=40,label='Train Tweets')
+plt.hist(length_test,bins=40,label='Test Tweets')
+plt.legend()
+plt.title('Comparision of Tweet Lengths')
+plt.show()
+#Combining Test and Train Datasets for Data Cleaning
+combined_df = pd.concat([df_train, df_test], axis=0)
+
+# Reset the index of the combined data frame
+combined_df = combined_df.reset_index(drop=True)
+
+print(combined_df.shape)
+display(combined_df)
+#function to remove unwanted text patterns from the tweet
+def remove_pattern(input_txt, pattern):
+    r = re.findall(pattern, input_txt)
+    for i in r:
+        input_txt = re.sub(i, '', input_txt)
+    return input_txt
+
+#function to replace non alphanumeric with space from the tweet
+def replace_non_alphanumeric_with_space(string):
+    replaced_string = re.sub(r'[^a-zA-Z0-9#]+', ' ', string)
+    return replaced_string
+
+#Removing @user from all tweets
+combined_df['tidy_tweet'] = combined_df['tweet'].apply(lambda x: remove_pattern(x, "@[user]*"))
+
+#Removing Unwanted and un-necessary punctuations and symbols
+combined_df['tidy_tweet'] = combined_df['tidy_tweet'].apply(replace_non_alphanumeric_with_space)
+
+#combined_df['tidy_tweet'] = combined_df['tidy_tweet'].str.replace(r'[\W_]+', " ")
+
+combined_df.head(10)
+
+
+#Removing Short Words
+combined_df['tidy_tweet'] = combined_df['tidy_tweet'].apply(lambda x: ' '.join([w for w in x.split() if len(w)>3]))
+combined_df
+
+#Tokenization
+tokenized_tweet = combined_df['tidy_tweet'].apply(lambda x: x.split()) # tokenizing
+print(tokenized_tweet.head())
+print('')
+#Text Normalization
+from nltk.stem.porter import *
+
+stemmer = PorterStemmer()
+tokenized_tweet = tokenized_tweet.apply(lambda x: [stemmer.stem(i) for i in x])
+
+#Detokenization
+for i in range(len(tokenized_tweet)):
+    tokenized_tweet[i] = ' '.join(tokenized_tweet[i])
+combined_df['tidy_tweet'] = tokenized_tweet
+
+display(combined_df)
+# === Cell Separator ===
+
+all_words = ' '.join([text for text in combined_df['tidy_tweet']])
+
+from wordcloud import WordCloud
+wordcloud = WordCloud(width = 800, height = 500, random_state = 21,
+                     max_font_size = 110).generate(all_words)
+plt.figure(figsize = (10,7))
+plt.imshow(wordcloud, interpolation = 'nearest')
+plt.axis('off')
+plt.show()
+print('')
+print('collecting the most frequent words visible in the wordCloud')
+# Getting the word frequencies from the word cloud
+word_frequencies = wordcloud.words_
+
+# Sorting the word frequencies in descending order
+sorted_word_frequencies = sorted(word_frequencies.items(), key=lambda x: x[1], reverse=True)
+
+# Extract the most frequent words and their frequencies
+top_words = sorted_word_frequencies[:10]  # Change the number as desired
+
+# Print the most frequent words and their frequencies
+for word, frequency in top_words:
+    print(f"{word}: {frequency}")
+
+#Most common words in normal/positive tweets
+normal_words = ' '.join([text for text in combined_df['tidy_tweet'][combined_df['label'] == 0]])
+wordcloud = WordCloud(width = 800, height = 500, random_state = 21, max_font_size = 110).generate(normal_words)
+plt.figure(figsize=(10, 7))
+plt.imshow(wordcloud, interpolation="bilinear")
+plt.axis('off')
+plt.show()
+
+#racist Words
+negative_words = ' '.join([text for text in combined_df['tidy_tweet'][combined_df['label'] == 1]])
+
+wordcloud = WordCloud(width = 800, height = 500, random_state = 21,max_font_size = 110).generate(negative_words)
+plt.figure(figsize = (10, 7))
+plt.imshow(wordcloud, interpolation = 'bilinear')
+plt.axis('off')
+plt.show()
+
+# === Cell Separator ===
+
+#Exploring hashtags on tweets sentiment
+
+# Defining a function to collect hashtags
+def hashtag_extract(x):
+    hashtags = []
+    # loop over the words in the tweet
+    for i in x:
+        ht = re.findall(r"#(\w+)", i)
+        hashtags.append(ht)
+
+    return hashtags
+
+#extracting hashtags from non racist/sexist tweets
+
+HT_regular = hashtag_extract(combined_df['tidy_tweet']
+                            [combined_df['label'] == 0])
+
+# extracting hashtags from racist/sexist tweets
+HT_negative = hashtag_extract(combined_df['tidy_tweet']
+                            [combined_df['label']== 1])
+
+# Unnesting/flattening list
+HT_regular = sum(HT_regular, [])
+HT_negative = sum(HT_negative, [])
+#HT_regular
+regular_hash = ' '.join([text for text in HT_regular])
+
+wordcloud = WordCloud(width = 800, height = 500, random_state = 21,max_font_size = 110).generate(regular_hash)
+plt.figure(figsize = (10, 7))
+plt.imshow(wordcloud, interpolation = 'bilinear')
+plt.axis('off')
+plt.show()
+
+# === Cell Separator ===
+
+negative_hash = ' '.join([text for text in HT_negative])
+
+wordcloud = WordCloud(width = 800, height = 500, random_state = 21,max_font_size = 110).generate(negative_hash)
+plt.figure(figsize = (10, 7))
+plt.imshow(wordcloud, interpolation = 'bilinear')
+plt.axis('off')
+plt.show()
+#BagOfWords
+from sklearn.feature_extraction.text import CountVectorizer , TfidfVectorizer
+import gensim
+
+bow_vectorizer = CountVectorizer(max_df=0.90, min_df=2, max_features=1000,   stop_words='english')
+bow = bow_vectorizer.fit_transform(combined_df['tidy_tweet'])
+bow.shape
+
+
+
+# === Cell Separator ===
+
+#TF-IDF Model
+tfidf_vectorizer = TfidfVectorizer(max_df=0.90, min_df=2, max_features=1000,
+                     stop_words='english')
+tfidf = tfidf_vectorizer.fit_transform(combined_df['tidy_tweet'])
+tfidf.shape
+
+#Word2Vec Model
+tokenized_tweet = combined_df['tidy_tweet'].apply(lambda x: x.split()) # tokenizing
+model_w2v = gensim.models.Word2Vec(tokenized_tweet,vector_size=200, window=5,min_count = 2,sg = 1,hs= 0,negative = 10,workers =2,seed= 34)
+model_w2v.train(tokenized_tweet, total_examples= len(combined_df['tidy_tweet']), epochs=20)
+
+#Testing the Word2Vec
+model_w2v.wv.most_similar(positive="trump")
+
+def word_vector(tokens, size):
+    vec = np.zeros(size).reshape((1, size))
+    count = 0
+    for word in tokens:
+        try:
+            vec += model_w2v.wv[word].reshape((1, size))
+            count += 1
+        except KeyError:  # handling the case where the token is not in vocabulary
+            continue
+    if count != 0:
+        vec /= count
+    return vec
+
+# === Cell Separator ===
+
+wordvec_arrays = np.zeros((len(tokenized_tweet), 200))
+for i in range(len(tokenized_tweet)):
+    wordvec_arrays[i, :] = word_vector(tokenized_tweet[i], 200)
+
+wordvec_df = pd.DataFrame(wordvec_arrays)
+wordvec_df.shape
+
+# Importing the Required Libraries and modules
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score as sklearn_roc_auc_score
+
+# Extracting train and test BoW features
+train_bow = bow[:31962, :]
+test_bow = bow[31962:, :]
+
+# Splitting the data into training and validation sets
+xtrain_bow, xvalid_bow, ytrain, yvalid = train_test_split(train_bow, df_train['label'], random_state=42, test_size=0.3
+)
+
+# Initialize and train the logistic regression model
+lreg = LogisticRegression()
+lreg.fit(xtrain_bow, ytrain)
+
+# Make predictions on the validation set
+prediction = lreg.predict_proba(xvalid_bow)
+prediction_int = (prediction[:, 1] >= 0.3).astype(int)
+
+# Calculate the F1 score for the validation set
+f1_val = f1_score(yvalid, prediction_int)
+roc_auc_val = sklearn_roc_auc_score(yvalid, prediction[:, 1])
+accuracy_val = accuracy_score(yvalid, prediction_int)
+
+print("The f1-score for using only the bag-of-words features is: {}".format(f1_val))
+print("The ROC-AUC-Score for using only the bag-of-words features is: {}".format(roc_auc_val))
+print("The Accuracy Score for using only the bag-of-words features is: {}".format(accuracy_val))
+
+
+test_pred = lreg.predict_proba(test_bow)
+test_pred_int = test_pred[:,1] >= 0.3
+test_pred_int = test_pred_int.astype(int)
+df_test['label'] = test_pred_int
+submission = df_test[['id','label']]
+submission.to_csv('C:/Users/Harsh/Downloads/sub_lreg_bow.csv', index=False) # writing data to a CSV file
+
+# === Cell Separator ===
+
+train_tfidf = tfidf[:31962,:]
+test_tfidf = tfidf[31962:,:]
+xtrain_tfidf = train_tfidf[ytrain.index]
+xvalid_tfidf = train_tfidf[yvalid.index]
+lreg.fit(xtrain_tfidf, ytrain)
+prediction = lreg.predict_proba(xvalid_tfidf)
+prediction_int = prediction[:,1] >= 0.3
+prediction_int = prediction_int.astype(int)
+
+f1_val = f1_score(yvalid, prediction_int)
+roc_auc_val = sklearn_roc_auc_score(yvalid, prediction[:, 1])
+accuracy_val = accuracy_score(yvalid, prediction_int)
+
+print("The f1-score for using only the TF-IDF features is: {}".format(f1_val))
+print("The ROC-AUC-Score for using only the TF-IDF features is: {}".format(roc_auc_val))
+print("The Accuracy Score for using only the TF-IDF features is: {}".format(accuracy_val))
+
+# === Cell Separator ===
+
+# Make predictions on the test TF-IDF features
+test_pred_tfidf = lreg.predict_proba(test_tfidf)
+test_pred_int_tfidf = (test_pred_tfidf[:, 1] >= 0.3).astype(int)
+
+# Create a DataFrame for submission
+df_test['label'] = test_pred_int_tfidf
+submission_tfidf = df_test[['id', 'label']]
+
+# Save the submission DataFrame to a CSV file
+submission_tfidf.to_csv('C:/Users/Harsh/Downloads/sub_lreg_tfidf.csv', index=False)
+
+# === Cell Separator ===
+
+train_w2v = wordvec_df.iloc[:31962,:]
+test_w2v = wordvec_df.iloc[31962:,:]
+xtrain_w2v = train_w2v.iloc[ytrain.index,:]
+xvalid_w2v = train_w2v.iloc[yvalid.index,:]
+lreg.fit(xtrain_w2v, ytrain)
+prediction = lreg.predict_proba(xvalid_w2v)
+prediction_int = prediction[:,1] >= 0.3
+prediction_int = prediction_int.astype(int)
+
+f1_val = f1_score(yvalid, prediction_int)
+roc_auc_val = sklearn_roc_auc_score(yvalid, prediction[:, 1])
+accuracy_val = accuracy_score(yvalid, prediction_int)
+
+print("The f1-score for using only the Word2Vector features is: {}".format(f1_val))
+print("The ROC-AUC-Score for using only the Word2Vector features is: {}".format(roc_auc_val))
+print("The Accuracy Score for using only the Word2Vector features is: {}".format(accuracy_val))
+
+# === Cell Separator ===
+
+# Make predictions on the test TF-IDF features
+test_pred_w2v = lreg.predict_proba(test_w2v)
+test_pred_int_w2v = (test_pred_w2v[:, 1] >= 0.3).astype(int)
+
+# Create a DataFrame for submission
+df_test['label'] = test_pred_int_w2v
+submission_w2v = df_test[['id', 'label']]
+
+# Save the submission DataFrame to a CSV file
+submission_w2v.to_csv('C:/Users/Harsh/Downloads/sub_lreg_w2v.csv', index=False)
+
+# === Cell Separator ===
+
+#Loading the Predicted DataSets
+
+bow_pred = pd.read_csv('C:/Users\Harsh\Downloads/sub_lreg_bow.csv')
+tfidf_pred = pd.read_csv('C:/Users\Harsh\Downloads/sub_lreg_tfidf.csv')
+w2v_pred = pd.read_csv('C:/Users/Harsh/Downloads/sub_lreg_w2v.csv')
+
+# === Cell Separator ===
+
+print('Predicted labels according to BOW:')
+print(bow_pred['label'].value_counts())
+print('')
+
+print('Predicted labels according to TF-IDF:')
+print(tfidf_pred['label'].value_counts())
+print('')
+
+print('Predicted labels according to Word2Vector:')
+print(w2v_pred['label'].value_counts())
+print('')
